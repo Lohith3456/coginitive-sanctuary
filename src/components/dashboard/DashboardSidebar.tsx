@@ -108,27 +108,6 @@ export function DashboardSidebar({ onNavigate }: { onNavigate?: () => void }) {
           );
         })}
       </nav>
-      <div className="mt-auto border-t border-slate-200/80 p-4">
-        <div className="rounded-2xl bg-[#E8F1FC] p-4 ring-1 ring-[#1D63D1]/10">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#1D63D1]/90">
-            Daily goal
-          </p>
-          <p className="mt-2 text-sm font-medium leading-snug text-slate-800">
-            Complete 1 practice section today.
-          </p>
-          <Link
-            href={
-              selectedExam
-                ? `/dashboard/practice?exam=${encodeURIComponent(selectedExam)}`
-                : "/dashboard/practice"
-            }
-            onClick={onNavigate}
-            className="mt-4 flex h-10 w-full items-center justify-center rounded-xl bg-[#1D63D1] text-xs font-bold uppercase tracking-wide text-white transition hover:bg-[#174ea6]"
-          >
-            Start Daily Quiz
-          </Link>
-        </div>
-      </div>
     </div>
   );
 }
