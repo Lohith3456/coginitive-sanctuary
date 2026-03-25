@@ -5,26 +5,41 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { AuthShell } from "@/components/auth/AuthShell";
 
-/** Demo-only: replace with real auth before production. */
+const ADMIN_EMAIL = "mothukurilohith2@gmail.com";
+const ADMIN_PASSWORD = "Lohith@123";
+
 const DEMO_EMAIL = "mothukurilohith3@gmail.com";
 const DEMO_PASSWORD = "Lohith@123";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     const trimmed = email.trim().toLowerCase();
-    const expectedEmail = DEMO_EMAIL.trim().toLowerCase();
-    if (trimmed !== expectedEmail || password !== DEMO_PASSWORD) {
-      setError("Invalid email or password.");
+
+    // Admin login
+    if (trimmed === ADMIN_EMAIL.toLowerCase()) {
+      if (password !== ADMIN_PASSWORD) {
+        setError("Invalid email or password.");
+        return;
+      }
+      sessionStorage.setItem("admin-auth", "true");
+      router.replace("/admin");
       return;
     }
-    router.push("/exams");
+
+    // Regular user login
+    if (trimmed === DEMO_EMAIL.toLowerCase() && password === DEMO_PASSWORD) {
+      router.push("/exams");
+      return;
+    }
+
+    setError("Invalid email or password.");
   }
 
   return (
