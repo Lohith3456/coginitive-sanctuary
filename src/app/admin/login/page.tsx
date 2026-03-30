@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-const ADMIN_EMAIL = "mothukurilohith2@gmail.com";
+const ADMIN_EMAIL = "mothukurilohith3@gmail.com";
 const ADMIN_PASSWORD = "Lohith@123";
 
 export default function AdminLoginPage() {

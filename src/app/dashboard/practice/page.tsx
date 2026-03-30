@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useExam } from "@/context/exam-context";
 import {
   isExamIdString,
-  EXAM_MODULES,
+  PRACTICE_SECTIONS,
   practiceQuestionsForExam,
   type PracticeSection,
 } from "@/lib/data";
@@ -29,7 +29,6 @@ function PracticeContent() {
   const [section, setSection] = useState<PracticeSection>(() =>
     isPracticeSection(sectionParam) ? sectionParam : "Reading",
   );
-  const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -42,7 +41,6 @@ function PracticeContent() {
     if (!isPracticeSection(sectionParam)) return;
     setSection(sectionParam);
     setAnswers({});
-    setStarted(false);
   }, [sectionParam]);
 
   const questionBank = useMemo(
@@ -54,29 +52,6 @@ function PracticeContent() {
     () => questionBank.filter((q) => q.section === section),
     [questionBank, section],
   );
-
-  const examKey = selectedExam ?? "IELTS";
-  const modules = EXAM_MODULES[examKey];
-
-  // active module — find by practiceSection match or index
-  const [activeModuleIdx, setActiveModuleIdx] = useState(0);
-
-  // reset when exam changes
-  useEffect(() => {
-    setActiveModuleIdx(0);
-  }, [examKey]);
-
-  const activeModule = modules[Math.min(activeModuleIdx, modules.length - 1)];
-  const activeSection: PracticeSection =
-    activeModule.practiceSection ?? "Reading";
-
-  // keep section in sync with active module
-  useEffect(() => {
-    setSection(activeSection);
-    setAnswers({});
-    setStarted(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeModuleIdx, examKey]);
 
   const examLabel = selectedExam ?? "No exam selected";
 
@@ -103,42 +78,25 @@ function PracticeContent() {
         </p>
       ) : null}
       <div className="mt-8 flex flex-wrap gap-2">
-        {modules.map((mod, idx) => (
+        {PRACTICE_SECTIONS.map((s) => (
           <button
-            key={mod.title}
+            key={s}
             type="button"
-            onClick={() => setActiveModuleIdx(idx)}
+            onClick={() => {
+              setSection(s);
+              setAnswers({});
+            }}
             className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              activeModuleIdx === idx
+              section === s
                 ? "bg-brand text-white shadow"
                 : "bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
             }`}
           >
-            {mod.title}
+            {s}
           </button>
         ))}
       </div>
-      {!started ? (
-        <div className="mt-12 flex flex-col items-center gap-4 rounded-2xl border border-slate-200 bg-white p-10 shadow-sm text-center">
-          <p className="text-lg font-semibold text-slate-900">
-            {activeModule.title}
-          </p>
-          <p className="text-sm text-slate-500 max-w-sm">
-            {activeModule.description}
-          </p>
-          <p className="text-xs text-slate-400">
-            {questions.length} question{questions.length !== 1 ? "s" : ""} in this section
-          </p>
-          <button
-            type="button"
-            onClick={() => setStarted(true)}
-            className="mt-2 rounded-lg bg-brand px-8 py-3 text-sm font-semibold text-white shadow hover:opacity-90 transition"
-          >
-            Start Test
-          </button>
-        </div>
-      ) : (
-        <div className="mt-8 space-y-8">
+      <div className="mt-8 space-y-8">
         {questions.map((q, idx) => (
           <article
             key={q.id}
@@ -179,8 +137,7 @@ function PracticeContent() {
             </ul>
           </article>
         ))}
-        </div>
-      )}
+      </div>
     </div>
   );
 }

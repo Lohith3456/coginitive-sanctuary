@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DatePicker } from "@/components/ui/DatePicker";
 
 const stats = [
   {
@@ -54,19 +55,22 @@ const stats = [
   },
 ];
 
-const monthlyData = [
-  { month: "Jan", newSubs: 320,  renewals: 180 },
-  { month: "Feb", newSubs: 410,  renewals: 220 },
-  { month: "Mar", newSubs: 380,  renewals: 260 },
-  { month: "Apr", newSubs: 520,  renewals: 310 },
-  { month: "May", newSubs: 490,  renewals: 340 },
-  { month: "Jun", newSubs: 610,  renewals: 390 },
-  { month: "Jul", newSubs: 570,  renewals: 420 },
-  { month: "Aug", newSubs: 680,  renewals: 460 },
-  { month: "Sep", newSubs: 720,  renewals: 500 },
-  { month: "Oct", newSubs: 810,  renewals: 540 },
-  { month: "Nov", newSubs: 940,  renewals: 610 },
-  { month: "Dec", newSubs: 1050, renewals: 680 },
+const examSubscriptions = [
+  { label: "IELTS", users: "8,210", color: "bg-blue-50 text-blue-600 border-blue-100" },
+  { label: "TOEFL", users: "5,490", color: "bg-teal-50 text-teal-600 border-teal-100" },
+  { label: "GRE", users: "2,890", color: "bg-orange-50 text-orange-600 border-orange-100" },
+  { label: "PTE", users: "1,614", color: "bg-purple-50 text-purple-600 border-purple-100" },
+];
+
+// Hourly activity data for the smooth line chart
+const hourlyData = [
+  { label: "00:00", value: 1200 },
+  { label: "04:00", value: 900 },
+  { label: "08:00", value: 2800 },
+  { label: "12:00", value: 3400 },
+  { label: "16:00", value: 5200 },
+  { label: "20:00", value: 8200 },
+  { label: "23:59", value: 6100 },
 ];
 
 const trackDist = [
@@ -76,20 +80,55 @@ const trackDist = [
 ];
 
 const students = [
-  { name: "Amara Okafor", track: "IELTS Academic", trackColor: "bg-blue-100 text-blue-700", status: "Active", statusColor: "text-green-500", joined: "Oct 12, 2023" },
-  { name: "Liam Chen", track: "TOEFL iBT", trackColor: "bg-teal-100 text-teal-700", status: "Pending", statusColor: "text-amber-500", joined: "Oct 14, 2023" },
-  { name: "Elena Rodriguez", track: "GRE General", trackColor: "bg-orange-100 text-orange-700", status: "Completed", statusColor: "text-blue-500", joined: "Sept 28, 2023" },
-  { name: "Arjun Sharma", track: "IELTS Academic", trackColor: "bg-blue-100 text-blue-700", status: "Active", statusColor: "text-green-500", joined: "Mar 24, 2026" },
-  { name: "Priya Nair", track: "TOEFL iBT", trackColor: "bg-teal-100 text-teal-700", status: "Active", statusColor: "text-green-500", joined: "Mar 23, 2026" },
+  { name: "Amara Okafor", email: "amara.o@example.com", track: "IELTS Academic", trackColor: "bg-blue-100 text-blue-700", status: "Active", statusColor: "text-green-500", joined: "2 minutes ago" },
+  { name: "Liam Chen", email: "liam.c@example.com", track: "TOEFL iBT", trackColor: "bg-teal-100 text-teal-700", status: "In Progress", statusColor: "text-amber-500", joined: "14 minutes ago" },
+  { name: "Elena Rodriguez", email: "elena.r@example.com", track: "GRE General", trackColor: "bg-orange-100 text-orange-700", status: "Subscribed", statusColor: "text-blue-500", joined: "1 hour ago" },
+  { name: "Arjun Sharma", email: "arjun.s@example.com", track: "IELTS Academic", trackColor: "bg-blue-100 text-blue-700", status: "Active", statusColor: "text-green-500", joined: "3 hours ago" },
+  { name: "Priya Nair", email: "priya.n@example.com", track: "TOEFL iBT", trackColor: "bg-teal-100 text-teal-700", status: "Active", statusColor: "text-green-500", joined: "5 hours ago" },
 ];
 
-const maxBar = Math.max(...monthlyData.map((d) => d.newSubs + d.renewals));
+// Build smooth SVG path from data points
+function buildSmoothPath(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return "";
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const cp1x = points[i].x + (points[i + 1].x - points[i].x) / 3;
+    const cp1y = points[i].y;
+    const cp2x = points[i + 1].x - (points[i + 1].x - points[i].x) / 3;
+    const cp2y = points[i + 1].y;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${points[i + 1].x} ${points[i + 1].y}`;
+  }
+  return d;
+}
 
 export default function AdminOverviewPage() {
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("2023-10-01");
+  const [dateTo, setDateTo] = useState("2023-10-31");
+  const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; value: number } | null>(null);
+
   const filtered = students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()),
   );
+
+  // SVG chart dimensions
+  const W = 700, H = 200, PAD = { top: 20, right: 20, bottom: 30, left: 10 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+  const maxVal = Math.max(...hourlyData.map((d) => d.value));
+
+  const points = hourlyData.map((d, i) => ({
+    x: PAD.left + (i / (hourlyData.length - 1)) * chartW,
+    y: PAD.top + (1 - d.value / maxVal) * chartH,
+    label: d.label,
+    value: d.value,
+  }));
+
+  const linePath = buildSmoothPath(points);
+  // Area fill path: line + close bottom
+  const areaPath = linePath
+    + ` L ${points[points.length - 1].x} ${PAD.top + chartH}`
+    + ` L ${points[0].x} ${PAD.top + chartH} Z`;
 
   return (
     <div className="space-y-6 max-w-[1100px]">
@@ -98,23 +137,17 @@ export default function AdminOverviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-[#1D3557]">Platform Insights</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Welcome back. Your educational ecosystem is performing with high intellectual clarity today.
+            A comprehensive overview of global student engagement, subscription health, and behavioral trends.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition"
-          >
+          <button type="button" className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
             Export Report
           </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-lg bg-[#1D3557] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16293f] transition"
-          >
+          <button type="button" className="flex items-center gap-2 rounded-lg bg-[#1D3557] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#16293f] transition">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
@@ -124,151 +157,138 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {stats.map((s) => (
-          <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between">
-              <div className={`rounded-xl p-2.5 ${s.iconBg}`}>{s.icon}</div>
-              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                s.up === true ? "bg-green-50 text-green-600" :
-                s.up === false ? "bg-red-50 text-red-500" :
-                "bg-slate-100 text-slate-500"
-              }`}>
-                {s.change}
-              </span>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+          {stats.map((s) => (
+            <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div className={`rounded-xl p-2.5 ${s.iconBg}`}>{s.icon}</div>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  s.up === true ? "bg-green-50 text-green-600" :
+                  s.up === false ? "bg-red-50 text-red-500" :
+                  "bg-slate-100 text-slate-500"
+                }`}>{s.change}</span>
+              </div>
+              <p className="mt-3 text-xs font-medium text-slate-500">{s.label}</p>
+              <p className="mt-0.5 text-2xl font-bold text-[#1D3557]">{s.value}</p>
             </div>
-            <p className="mt-3 text-xs font-medium text-slate-500">{s.label}</p>
-            <p className="mt-0.5 text-2xl font-bold text-[#1D3557]">{s.value}</p>
-          </div>
-        ))}
+          ))}
+        </div>
+
+        {/* Exam subscription breakdown */}
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {examSubscriptions.map((e) => (
+            <div key={e.label} className={`rounded-xl border px-4 py-3 ${e.color}`}>
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">{e.label} Subscribers</p>
+              <p className="mt-1 text-xl font-bold">{e.users}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Charts row */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Monthly subscriptions chart */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-[#1D3557]">Monthly Subscriptions</h2>
-              <p className="text-xs text-slate-400">No. of users who took a subscription per month</p>
-            </div>
-            <div className="flex items-center gap-4 text-xs text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-[#1D63D1]" /> New Subscriptions
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-slate-200" /> Renewals
-              </span>
-            </div>
+      {/* User Activity Line Chart */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-[#1D3557]">User Activity &amp; Growth</h2>
+            <p className="text-xs text-slate-400">Real-time engagement telemetry and student acquisition data</p>
           </div>
-
-          {/* Y-axis labels + bars */}
-          <div className="flex gap-2">
-            {/* Y labels */}
-            <div className="flex flex-col justify-between pb-5 text-right">
-              {[1200, 900, 600, 300, 0].map((v) => (
-                <span key={v} className="text-[10px] text-slate-300 leading-none">{v}</span>
-              ))}
-            </div>
-
-            {/* Chart area */}
-            <div className="flex flex-1 flex-col gap-1">
-              {/* Gridlines + bars */}
-              <div className="relative flex flex-1 items-end gap-1.5" style={{ height: 160 }}>
-                {/* Horizontal gridlines */}
-                {[0, 25, 50, 75, 100].map((pct) => (
-                  <div
-                    key={pct}
-                    className="pointer-events-none absolute left-0 right-0 border-t border-slate-100"
-                    style={{ bottom: `${pct}%` }}
-                  />
-                ))}
-                {monthlyData.map((d) => {
-                  const newH  = (d.newSubs  / maxBar) * 100;
-                  const renH  = (d.renewals / maxBar) * 100;
-                  return (
-                    <div key={d.month} className="group relative flex flex-1 items-end gap-0.5">
-                      {/* Tooltip */}
-                      <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-10">
-                        <div className="rounded-lg bg-[#1D3557] px-2.5 py-1.5 text-[10px] text-white whitespace-nowrap shadow-lg">
-                          <p className="font-semibold">{d.month}</p>
-                          <p>New: {d.newSubs.toLocaleString()}</p>
-                          <p>Renewals: {d.renewals.toLocaleString()}</p>
-                        </div>
-                        <div className="h-1.5 w-1.5 rotate-45 bg-[#1D3557] -mt-1" />
-                      </div>
-                      <div
-                        className="flex-1 rounded-t-sm bg-[#1D63D1] transition-all duration-200 group-hover:bg-[#1a56b8]"
-                        style={{ height: `${newH}%` }}
-                      />
-                      <div
-                        className="flex-1 rounded-t-sm bg-slate-200 transition-all duration-200 group-hover:bg-slate-300"
-                        style={{ height: `${renH}%` }}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-              {/* X labels */}
-              <div className="flex gap-1.5">
-                {monthlyData.map((d) => (
-                  <div key={d.month} className="flex-1 text-center">
-                    <span className="text-[10px] text-slate-400">{d.month}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Summary row */}
-          <div className="mt-4 flex items-center gap-6 border-t border-slate-100 pt-3">
-            <div>
-              <p className="text-xs text-slate-400">Total this year</p>
-              <p className="text-base font-bold text-[#1D3557]">
-                {monthlyData.reduce((a, d) => a + d.newSubs, 0).toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-400">Renewals this year</p>
-              <p className="text-base font-bold text-[#1D3557]">
-                {monthlyData.reduce((a, d) => a + d.renewals, 0).toLocaleString()}
-              </p>
-            </div>
-            <div className="ml-auto">
-              <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-600">
-                ↑ 28% vs last year
-              </span>
-            </div>
+          <div className="flex items-center gap-2">
+            <DatePicker value={dateFrom} onChange={setDateFrom} />
+            <span className="text-xs text-slate-400">–</span>
+            <DatePicker value={dateTo} onChange={setDateTo} />
           </div>
         </div>
 
-        {/* Track distribution */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-sm font-bold text-[#1D3557]">Track Distribution</h2>
-          <p className="text-xs text-slate-400">Enrollment by exam type</p>
-          <div className="mt-4 space-y-4">
-            {trackDist.map((t) => (
-              <div key={t.label}>
-                <div className="mb-1 flex justify-between text-xs">
-                  <span className="font-medium text-slate-700">{t.label}</span>
-                  <span className="font-semibold text-slate-600">{t.pct}%</span>
-                </div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                  <div className={`h-full rounded-full ${t.color}`} style={{ width: `${t.pct}%` }} />
-                </div>
-              </div>
+        {/* SVG Line Chart */}
+        <div className="relative w-full overflow-hidden">
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className="w-full"
+            style={{ height: 220 }}
+            onMouseLeave={() => setTooltip(null)}
+          >
+            <defs>
+              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#1D63D1" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#1D63D1" stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+
+            {/* Gridlines */}
+            {[0, 0.25, 0.5, 0.75, 1].map((pct) => (
+              <line
+                key={pct}
+                x1={PAD.left}
+                x2={PAD.left + chartW}
+                y1={PAD.top + pct * chartH}
+                y2={PAD.top + pct * chartH}
+                stroke="#e2e8f0"
+                strokeWidth={1}
+              />
             ))}
-          </div>
-          <div className="mt-5 flex justify-around border-t border-slate-100 pt-4">
-            <div className="text-center">
-              <p className="text-sm font-bold text-[#1D3557]">IELTS</p>
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">Leading</p>
+
+            {/* Area fill */}
+            <path d={areaPath} fill="url(#areaGrad)" />
+
+            {/* Line */}
+            <path d={linePath} fill="none" stroke="#1D63D1" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+
+            {/* Data points + hover zones */}
+            {points.map((p) => (
+              <g key={p.label}>
+                <circle cx={p.x} cy={p.y} r={5} fill="white" stroke="#1D63D1" strokeWidth={2} />
+                {/* invisible wider hit area */}
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={18}
+                  fill="transparent"
+                  onMouseEnter={() => setTooltip(p)}
+                />
+              </g>
+            ))}
+
+            {/* X-axis labels */}
+            {points.map((p) => (
+              <text key={p.label} x={p.x} y={H - 4} textAnchor="middle" fontSize={10} fill="#94a3b8">
+                {p.label}
+              </text>
+            ))}
+          </svg>
+
+          {/* Tooltip */}
+          {tooltip && (
+            <div
+              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg bg-[#1D3557] px-3 py-2 text-xs text-white shadow-lg"
+              style={{
+                left: `${(tooltip.x / W) * 100}%`,
+                top: `${((tooltip.y - PAD.top) / (H - PAD.top - PAD.bottom)) * 85}%`,
+              }}
+            >
+              <p className="font-bold">{tooltip.value.toLocaleString()} Users</p>
+              <p className="text-slate-300">{tooltip.label}</p>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-bold text-[#1D3557]">GRE</p>
-              <p className="text-[10px] uppercase tracking-wide text-slate-400">Growing</p>
+          )}
+        </div>
+      </div>
+
+      {/* Track distribution */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-bold text-[#1D3557]">Track Distribution</h2>
+        <p className="text-xs text-slate-400">Enrollment by exam type</p>
+        <div className="mt-4 space-y-4">
+          {trackDist.map((t) => (
+            <div key={t.label}>
+              <div className="mb-1 flex justify-between text-xs">
+                <span className="font-medium text-slate-700">{t.label}</span>
+                <span className="font-semibold text-slate-600">{t.pct}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div className={`h-full rounded-full ${t.color}`} style={{ width: `${t.pct}%` }} />
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -289,10 +309,8 @@ export default function AdminOverviewPage() {
                 className="w-36 bg-transparent text-xs text-slate-700 outline-none placeholder-slate-400"
               />
             </div>
-            <button type="button" className="rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-slate-50">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" />
-              </svg>
+            <button type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
+              View All Students
             </button>
           </div>
         </div>
@@ -300,10 +318,10 @@ export default function AdminOverviewPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              <th className="px-5 py-3">Student Name</th>
-              <th className="px-5 py-3">Exam Track</th>
+              <th className="px-5 py-3">Student</th>
+              <th className="px-5 py-3">Target Course</th>
               <th className="px-5 py-3">Status</th>
-              <th className="px-5 py-3">Join Date</th>
+              <th className="px-5 py-3">Activity Date</th>
               <th className="px-5 py-3">Actions</th>
             </tr>
           </thead>
@@ -312,10 +330,13 @@ export default function AdminOverviewPage() {
               <tr key={s.name} className="hover:bg-slate-50/60 transition">
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1D63D1]/10 text-xs font-bold text-[#1D63D1]">
                       {s.name[0]}
                     </div>
-                    <span className="font-semibold text-slate-800">{s.name}</span>
+                    <div>
+                      <p className="font-semibold text-slate-800">{s.name}</p>
+                      <p className="text-[11px] text-slate-400">{s.email}</p>
+                    </div>
                   </div>
                 </td>
                 <td className="px-5 py-3.5">
@@ -326,8 +347,8 @@ export default function AdminOverviewPage() {
                 <td className="px-5 py-3.5">
                   <span className={`flex items-center gap-1.5 text-xs font-semibold ${s.statusColor}`}>
                     <span className={`h-1.5 w-1.5 rounded-full ${
-                      s.status === "Active" ? "bg-green-500" :
-                      s.status === "Pending" ? "bg-amber-400" : "bg-blue-400"
+                      s.status === "Active" || s.status === "Subscribed" ? "bg-green-500" :
+                      s.status === "In Progress" ? "bg-amber-400" : "bg-blue-400"
                     }`} />
                     {s.status}
                   </span>
@@ -348,12 +369,8 @@ export default function AdminOverviewPage() {
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
           <p className="text-xs text-slate-400">Showing {filtered.length} of 1,240 students</p>
           <div className="flex gap-2">
-            <button type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
-              Prev
-            </button>
-            <button type="button" className="rounded-lg bg-[#1D3557] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#16293f] transition">
-              Next
-            </button>
+            <button type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">Prev</button>
+            <button type="button" className="rounded-lg bg-[#1D3557] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#16293f] transition">Next</button>
           </div>
         </div>
       </div>
