@@ -25,7 +25,7 @@ export default function DashboardLayout({
           />
         ) : null}
         <aside
-          className={`fixed left-0 top-16 z-50 h-[calc(100dvh-4rem)] w-[min(280px,88vw)] -translate-x-full overflow-y-auto border-r border-slate-200/90 bg-[#F3F4F6] shadow-xl transition-transform duration-200 lg:sticky lg:top-16 lg:z-0 lg:h-[calc(100dvh-4rem)] lg:w-[260px] lg:shrink-0 lg:translate-x-0 lg:shadow-none lg:overflow-y-auto ${
+          className={`fixed left-0 top-16 z-50 h-[calc(100dvh-4rem)] w-[min(280px,88vw)] -translate-x-full overflow-y-auto border-r border-slate-200/90 bg-[#F3F4F6] shadow-xl transition-transform duration-200 lg:sticky lg:top-16 lg:z-0 lg:h-[calc(100dvh-4rem)] lg:w-[260px] lg:shrink-0 lg:translate-x-0 lg:shadow-none lg:self-start ${
             menuOpen ? "translate-x-0" : ""
           }`}
         >
