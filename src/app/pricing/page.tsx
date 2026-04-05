@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useExam } from "@/context/exam-context";
 import {
   PRICING_PLANS,
@@ -10,6 +11,7 @@ import {
 export default function PricingPage() {
   const { selectedExam } = useExam();
   const adjust = examPriceAdjust(selectedExam);
+  const router = useRouter();
 
   return (
     <div className="min-h-screen bg-white">
@@ -95,7 +97,12 @@ export default function PricingPage() {
                       : "border-2 border-slate-200 text-slate-800 hover:bg-slate-50"
                   }`}
                   onClick={() => {
-                    /* static demo */
+                    const params = new URLSearchParams({
+                      plan: plan.name,
+                      price: String(price),
+                      ...(selectedExam ? { exam: selectedExam } : {}),
+                    });
+                    router.push(`/checkout?${params.toString()}`);
                   }}
                 >
                   Subscribe
