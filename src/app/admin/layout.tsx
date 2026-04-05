@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 
@@ -18,6 +18,15 @@ const bottomNav = [
     icon: (
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/faculty",
+    label: "Faculty Onboarding",
+    icon: (
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
       </svg>
     ),
   },
@@ -53,12 +62,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (typeof window === "undefined") return false;
     return sessionStorage.getItem("admin-auth") === "true";
   });
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (isLoginPage) return;
     const ok = sessionStorage.getItem("admin-auth") === "true";
     if (!ok) {
-      router.replace("/login");
+      router.replace("/admin/login");
     } else {
       setAuthed(true);
     }
@@ -67,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const handleLogout = () => {
     sessionStorage.removeItem("admin-auth");
     setAuthed(false);
-    router.push("/login");
+    router.push("/");
   };
 
   if (isLoginPage) return <>{children}</>;
@@ -115,14 +136,42 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1D63D1] text-xs font-bold text-white">
-              A
-            </div>
-            <div className="hidden sm:block text-right">
-              <p className="text-xs font-bold text-slate-800">Admin Portal</p>
-              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Educational Excellence</p>
-            </div>
+          <div ref={profileRef} className="relative flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setProfileOpen((v) => !v)}
+              className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-slate-100 transition"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1D63D1] text-xs font-bold text-white">
+                A
+              </div>
+              <div className="hidden sm:block text-right">
+                <p className="text-xs font-bold text-slate-800">Admin Portal</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wide">Educational Excellence</p>
+              </div>
+              <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {profileOpen && (
+              <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-slate-200 bg-white py-1 shadow-lg z-50">
+                <div className="border-b border-slate-100 px-4 py-2">
+                  <p className="text-xs font-semibold text-slate-800">Admin</p>
+                  <p className="text-[11px] text-slate-400 truncate">mothukurilohith3@gmail.com</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

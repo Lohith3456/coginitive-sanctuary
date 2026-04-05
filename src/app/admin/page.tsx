@@ -1,59 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DatePicker } from "@/components/ui/DatePicker";
 
-const stats = [
-  {
-    label: "Total Users",
-    value: "24,892",
-    change: "+12.5%",
-    up: true,
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-      </svg>
-    ),
-    iconBg: "bg-blue-50 text-blue-500",
-  },
-  {
-    label: "Active Subscriptions",
-    value: "18,204",
-    change: "+8.2%",
-    up: true,
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-      </svg>
-    ),
-    iconBg: "bg-teal-50 text-teal-500",
-  },
-  {
-    label: "Mock Tests Taken",
-    value: "142.5k",
-    change: "+24%",
-    up: true,
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-      </svg>
-    ),
-    iconBg: "bg-orange-50 text-orange-500",
-  },
-  {
-    label: "Avg. Band Score",
-    value: "7.5",
-    change: "Stable",
-    up: null,
-    icon: (
-      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
-      </svg>
-    ),
-    iconBg: "bg-slate-100 text-slate-500",
-  },
-];
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+
+function fmt(n: number): string {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+  return n.toString();
+}
 
 const examSubscriptions = [
   { label: "IELTS", users: "8,210", color: "bg-blue-50 text-blue-600 border-blue-100" },
@@ -86,8 +42,6 @@ const students = [
   { name: "Arjun Sharma", email: "arjun.s@example.com", track: "IELTS Academic", trackColor: "bg-blue-100 text-blue-700", status: "Active", statusColor: "text-green-500", joined: "3 hours ago" },
   { name: "Priya Nair", email: "priya.n@example.com", track: "TOEFL iBT", trackColor: "bg-teal-100 text-teal-700", status: "Active", statusColor: "text-green-500", joined: "5 hours ago" },
 ];
-
-// Build smooth SVG path from data points
 function buildSmoothPath(points: { x: number; y: number }[]): string {
   if (points.length < 2) return "";
   let d = `M ${points[0].x} ${points[0].y}`;
@@ -103,9 +57,100 @@ function buildSmoothPath(points: { x: number; y: number }[]): string {
 
 export default function AdminOverviewPage() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [dateFrom, setDateFrom] = useState("2023-10-01");
   const [dateTo, setDateTo] = useState("2023-10-31");
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; value: number } | null>(null);
+  const [liveStats, setLiveStats] = useState<{
+    totalUsers: number;
+    activeSubscriptions: number;
+    mockTestsTaken: number;
+    avgBandScore: number | null;
+  } | null>(null);
+  const [liveStudents, setLiveStudents] = useState<{
+    users: {
+      id: string; email: string; phone: string | null;
+      username: string | null; displayName: string;
+      role: string; status: string; joinedAgo: string;
+    }[];
+    total: number;
+  } | null>(null);
+  const [activityData, setActivityData] = useState<{ label: string; value: number }[]>(hourlyData);
+
+  useEffect(() => {
+    fetch(`${API}/api/admin/stats`)
+      .then((r) => r.json())
+      .then(setLiveStats)
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams({ page: String(page), limit: "10", search });
+    fetch(`${API}/api/admin/users?${params}`)
+      .then((r) => r.json())
+      .then(setLiveStudents)
+      .catch(console.error);
+  }, [page, search]);
+
+  useEffect(() => {
+    if (!dateFrom || !dateTo) return;
+    fetch(`${API}/api/admin/activity?from=${dateFrom}&to=${dateTo}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.data?.length) setActivityData(d.data); })
+      .catch(console.error);
+  }, [dateFrom, dateTo]);
+
+  const stats = [
+    {
+      label: "Total Users",
+      value: liveStats ? fmt(liveStats.totalUsers) : "—",
+      change: "+12.5%",
+      up: true,
+      icon: (
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+        </svg>
+      ),
+      iconBg: "bg-blue-50 text-blue-500",
+    },
+    {
+      label: "Active Subscriptions",
+      value: liveStats ? fmt(liveStats.activeSubscriptions) : "—",
+      change: "+8.2%",
+      up: true,
+      icon: (
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+        </svg>
+      ),
+      iconBg: "bg-teal-50 text-teal-500",
+    },
+    {
+      label: "Mock Tests Taken",
+      value: liveStats ? (liveStats.mockTestsTaken > 0 ? fmt(liveStats.mockTestsTaken) : "0") : "—",
+      change: "+24%",
+      up: true,
+      icon: (
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
+        </svg>
+      ),
+      iconBg: "bg-orange-50 text-orange-500",
+    },
+    {
+      label: "Avg. Band Score",
+      value: liveStats?.avgBandScore != null ? String(liveStats.avgBandScore) : "N/A",
+      change: "Stable",
+      up: null,
+      icon: (
+        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+        </svg>
+      ),
+      iconBg: "bg-slate-100 text-slate-500",
+    },
+  ];
 
   const filtered = students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()),
@@ -115,10 +160,10 @@ export default function AdminOverviewPage() {
   const W = 700, H = 200, PAD = { top: 20, right: 20, bottom: 30, left: 10 };
   const chartW = W - PAD.left - PAD.right;
   const chartH = H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(...hourlyData.map((d) => d.value));
+  const maxVal = Math.max(...activityData.map((d) => d.value), 1);
 
-  const points = hourlyData.map((d, i) => ({
-    x: PAD.left + (i / (hourlyData.length - 1)) * chartW,
+  const points = activityData.map((d, i) => ({
+    x: PAD.left + (i / (activityData.length - 1)) * chartW,
     y: PAD.top + (1 - d.value / maxVal) * chartH,
     label: d.label,
     value: d.value,
@@ -305,7 +350,7 @@ export default function AdminOverviewPage() {
                 type="search"
                 placeholder="Search students..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 className="w-36 bg-transparent text-xs text-slate-700 outline-none placeholder-slate-400"
               />
             </div>
@@ -326,51 +371,62 @@ export default function AdminOverviewPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {filtered.map((s) => (
-              <tr key={s.name} className="hover:bg-slate-50/60 transition">
-                <td className="px-5 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1D63D1]/10 text-xs font-bold text-[#1D63D1]">
-                      {s.name[0]}
+            {(liveStudents?.users ?? students).map((s) => {
+              const email = s.email;
+              const name = 'displayName' in s ? (s as { displayName: string }).displayName : ('name' in s ? (s as { name: string }).name : email.split('@')[0]);
+              const joined = 'joinedAgo' in s ? (s as { joinedAgo: string }).joinedAgo : (s as { joined: string }).joined;
+              const track = 'track' in s ? (s as { track: string }).track : '—';
+              const trackColor = 'trackColor' in s ? (s as { trackColor: string }).trackColor : 'bg-slate-100 text-slate-600';
+              const status = s.status;
+              const statusColor = status === 'Active' ? 'text-green-500' : status === 'In Progress' ? 'text-amber-500' : 'text-blue-500';
+              return (
+                <tr key={email} className="hover:bg-slate-50/60 transition">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1D63D1]/10 text-xs font-bold text-[#1D63D1]">
+                        {name[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-800">{name}</p>
+                        <p className="text-[11px] text-slate-400">{email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-slate-800">{s.name}</p>
-                      <p className="text-[11px] text-slate-400">{s.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${s.trackColor}`}>
-                    {s.track}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5">
-                  <span className={`flex items-center gap-1.5 text-xs font-semibold ${s.statusColor}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${
-                      s.status === "Active" || s.status === "Subscribed" ? "bg-green-500" :
-                      s.status === "In Progress" ? "bg-amber-400" : "bg-blue-400"
-                    }`} />
-                    {s.status}
-                  </span>
-                </td>
-                <td className="px-5 py-3.5 text-xs text-slate-500">{s.joined}</td>
-                <td className="px-5 py-3.5">
-                  <button type="button" className="text-slate-400 hover:text-slate-700">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${trackColor}`}>
+                      {track}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className={`flex items-center gap-1.5 text-xs font-semibold ${statusColor}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${
+                        status === "Active" || status === "Subscribed" ? "bg-green-500" :
+                        status === "In Progress" ? "bg-amber-400" : "bg-blue-400"
+                      }`} />
+                      {status}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-xs text-slate-500">{joined}</td>
+                  <td className="px-5 py-3.5">
+                    <button type="button" className="text-slate-400 hover:text-slate-700">
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-          <p className="text-xs text-slate-400">Showing {filtered.length} of 1,240 students</p>
+          <p className="text-xs text-slate-400">
+            Showing {liveStudents?.users.length ?? students.length} of {liveStudents?.total ?? "1,240"} students
+          </p>
           <div className="flex gap-2">
-            <button type="button" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">Prev</button>
-            <button type="button" className="rounded-lg bg-[#1D3557] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#16293f] transition">Next</button>
+            <button type="button" disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition">Prev</button>
+            <button type="button" disabled={liveStudents ? page * 10 >= liveStudents.total : false} onClick={() => setPage(p => p + 1)} className="rounded-lg bg-[#1D3557] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#16293f] disabled:opacity-40 transition">Next</button>
           </div>
         </div>
       </div>

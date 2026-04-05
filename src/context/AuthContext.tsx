@@ -9,7 +9,7 @@ interface AuthUser {
 
 interface AuthContextValue {
   user: AuthUser | null;
-  login: (email: string, password: string, tenantSlug: string) => Promise<void>;
+  login: (identifier: { email?: string; phone?: string }, password: string) => Promise<{ role: string }>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
 }
@@ -21,16 +21,17 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
 
-  const login = useCallback(async (email: string, password: string, tenantSlug: string) => {
+  const login = useCallback(async (identifier: { email?: string; phone?: string }, password: string) => {
     const res = await fetch(`${API}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ email, password, tenantSlug }),
+      body: JSON.stringify({ ...identifier, password }),
     });
     if (!res.ok) throw new Error('Invalid credentials');
     const data = await res.json();
     setUser({ email: data.email, role: data.role });
+    return { role: data.role as string };
   }, []);
 
   const logout = useCallback(async () => {
