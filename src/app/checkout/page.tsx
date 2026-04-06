@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 const PLATFORM_FEE = 12;
 const DISCOUNT = 50;
 
@@ -37,21 +38,86 @@ function CheckoutContent() {
   const price = Number(searchParams.get("price") || 64);
   const exam = searchParams.get("exam") || "";
 
-  const total = price + PLATFORM_FEE - DISCOUNT;
-
   const [method, setMethod] = useState<PaymentMethod>(null);
-  const [view, setView] = useState<"select" | "netbanking">("select");
+  const [view, setView] = useState<"select" | "netbanking" | "upi">("select");
   const [selectedBank, setSelectedBank] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [upiVerified, setUpiVerified] = useState(false);
+  const [upiVerifying, setUpiVerifying] = useState(false);
   const [referral, setReferral] = useState("");
   const [referralApplied, setReferralApplied] = useState(false);
+  const [referralError, setReferralError] = useState("");
+  const [referralValidating, setReferralValidating] = useState(false);
+  const [referralDiscount, setReferralDiscount] = useState(0); // actual discount from code
+  const [referralDiscountType, setReferralDiscountType] = useState<"fixed" | "percent">("fixed");
   const [loading, setLoading] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
 
-  function handleComplete() {
-    if (!method) return;
+  // Enabled payment gateways from admin settings
+  const [enabledGateways, setEnabledGateways] = useState({ upi: true, card: true, netbanking: false });
+  useEffect(() => {
+    fetch(`${API}/api/admin/payment-settings`)
+      .then((r) => r.json())
+      .then((d) => setEnabledGateways({ upi: d.upi ?? true, card: d.card ?? true, netbanking: d.netbanking ?? false }))
+      .catch(() => {});
+  }, []);
+
+  // Compute final total with referral applied
+  const baseTotal = price + PLATFORM_FEE - DISCOUNT;
+  const referralDeduction = referralApplied
+    ? referralDiscountType === "percent"
+      ? (baseTotal * referralDiscount) / 100
+      : referralDiscount
+    : 0;
+  const total = Math.max(0, baseTotal - referralDeduction);
+
+  function resetView() {
+    setView("select"); setMethod(null);
+    setSelectedBank(""); setUpiId(""); setUpiVerified(false);
+  }
+
+  function handleVerifyUpi() {
+    if (!upiId.includes("@")) return;
+    setUpiVerifying(true);
+    setTimeout(() => { setUpiVerifying(false); setUpiVerified(true); }, 1000);
+  }
+
+  async function handleApplyReferral() {
+    if (!referral.trim()) return;
+    setReferralError("");
+    setReferralApplied(false);
+    setReferralValidating(true);
+    try {
+      const res = await fetch(`${API}/api/admin/referrals/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: referral.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setReferralError(data.message || "Invalid code"); return; }
+      setReferralDiscount(data.discountAmount);
+      setReferralDiscountType(data.discountType);
+      setReferralApplied(true);
+    } catch {
+      setReferralError("Could not validate code. Check your connection.");
+    } finally {
+      setReferralValidating(false);
+    }
+  }
+
+  async function handleComplete() {
+    if (!method && total > 0) return;
     setLoading(true);
+    if (referralApplied && referral.trim()) {
+      await fetch(`${API}/api/admin/referrals/redeem`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: referral.trim() }),
+      }).catch(() => {});
+    }
     setTimeout(() => {
       setLoading(false);
-      router.push("/dashboard");
+      setConfirmed(true);
     }, 1200);
   }
 
@@ -89,8 +155,8 @@ function CheckoutContent() {
             <p className="mb-6 text-xs text-slate-400">Complete your enrollment</p>
             <nav className="space-y-1">
               {steps.map((s, i) => {
-                const done = i < 2;
-                const active = i === 2;
+                const done = confirmed ? i < 4 : i < 2;
+                const active = confirmed ? i === 3 : i === 2;
                 return (
                   <div key={s.label} className="flex items-center gap-3 py-2">
                     <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold border-2 ${
@@ -112,13 +178,184 @@ function CheckoutContent() {
             </nav>
           </aside>
 
-          {/* Center — payment methods or net banking detail */}
+          {/* Center — payment methods or detail views */}
           <main>
-            {view === "netbanking" ? (
+            {confirmed ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 mb-5">
+                  <svg className="h-10 w-10 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900">Enrollment Confirmed!</h1>
+                <p className="mt-2 text-sm text-slate-500 max-w-sm">
+                  You&apos;re now enrolled in <span className="font-semibold text-slate-700">{exam ? `${exam.toUpperCase()} — ` : ""}{planName} Plan</span>.
+                  {total === 0 ? " Your referral code covered the full amount." : " Your payment was processed successfully."}
+                </p>
+
+                <div className="mt-6 w-full max-w-sm rounded-2xl border border-slate-200 bg-slate-50 p-5 text-left space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Plan</span>
+                    <span className="font-semibold text-slate-800">{planName}</span>
+                  </div>
+                  {exam && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Exam</span>
+                      <span className="font-semibold text-slate-800">{exam.toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Amount Paid</span>
+                    <span className="font-semibold text-slate-800">${total.toFixed(2)}</span>
+                  </div>
+                  {referralApplied && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Referral Code</span>
+                      <span className="font-semibold text-emerald-600">{referral}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Status</span>
+                    <span className="flex items-center gap-1.5 font-semibold text-emerald-600">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      Active
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <Link
+                    href="/dashboard"
+                    className="rounded-xl bg-[#1D3557] px-6 py-3 text-sm font-bold text-white hover:bg-[#162840] transition"
+                  >
+                    Go to Dashboard
+                  </Link>
+                  <Link
+                    href="/exams"
+                    className="rounded-xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
+                  >
+                    Browse More Courses
+                  </Link>
+                </div>
+              </div>
+            ) : view === "upi" ? (
               <>
                 <div className="flex items-center gap-2 mb-1">
-                  <button type="button" onClick={() => { setView("select"); setMethod(null); setSelectedBank(""); }} className="text-slate-400 hover:text-slate-600">
+                  <button type="button" onClick={resetView} className="text-slate-400 hover:text-slate-600">
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                    </svg>
+                  </button>
+                  <h1 className="text-2xl font-bold text-slate-900">Pay via UPI</h1>
+                </div>
+                <p className="mt-1 text-sm text-slate-500 mb-6">
+                  Securely complete your enrollment using any UPI application.
+                </p>
+
+                {/* QR + scan section */}
+                <div className="rounded-xl border border-slate-200 bg-white p-5 mb-4">
+                  <div className="flex gap-6 items-center">
+                    {/* QR code placeholder */}
+                    <div className="flex h-36 w-36 shrink-0 items-center justify-center rounded-xl border-2 border-slate-200 bg-slate-50 p-3">
+                      <svg viewBox="0 0 100 100" className="h-full w-full text-slate-800">
+                        {/* Simple QR-like pattern */}
+                        {[0,1,2,3,4,5,6].map(r => [0,1,2,3,4,5,6].map(c => {
+                          const isCorner = (r < 2 && c < 2) || (r < 2 && c > 4) || (r > 4 && c < 2);
+                          const val = ((r * 7 + c) * 13 + r + c) % 3;
+                          return val === 0 || isCorner ? (
+                            <rect key={`${r}-${c}`} x={c * 14 + 1} y={r * 14 + 1} width={12} height={12} fill="currentColor" rx={1} />
+                          ) : null;
+                        }))}
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-slate-800">Scan and Pay</p>
+                      <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+                        Open your favorite UPI app (GPay, PhonePe, Paytm) and scan this code to pay instantly.
+                      </p>
+                      <div className="mt-3 flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-green-500" />
+                        <span className="text-xs font-semibold text-green-600">Active QR</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* UPI ID input */}
+                <div className="rounded-xl border border-slate-200 bg-white p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-slate-700">Enter UPI ID</p>
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+                      Fast &amp; Secure
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={upiId}
+                      onChange={(e) => { setUpiId(e.target.value); setUpiVerified(false); }}
+                      placeholder="example@upi"
+                      className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyUpi}
+                      disabled={!upiId.includes("@") || upiVerifying}
+                      className="rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50"
+                    >
+                      {upiVerifying ? "…" : "Verify"}
+                    </button>
+                  </div>
+
+                  {upiVerified && (
+                    <div className="mt-3 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3">
+                      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500">
+                        <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-green-600">Verified Account Holder</p>
+                        <p className="text-sm font-semibold text-slate-800">{upiId.split("@")[0].replace(/[^a-zA-Z ]/g, " ").trim() || "Account Holder"}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Complete payment button */}
+                <button
+                  type="button"
+                  disabled={!upiVerified || loading}
+                  onClick={handleComplete}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1D3557] py-3.5 text-sm font-bold text-white transition hover:bg-[#162840] disabled:opacity-50"
+                >
+                  {loading ? "Processing…" : "Complete Payment"}
+                  {!loading && (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
+                  )}
+                </button>
+                <div className="mt-3 flex items-center justify-center gap-4 text-xs text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <svg className="h-3.5 w-3.5 text-green-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                    </svg>
+                    Secure Transaction
+                  </span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1">
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    SSL Encrypted
+                  </span>
+                </div>
+              </>
+            ) : view === "netbanking" ? (
+              <>
+                <div className="flex items-center gap-2 mb-1">
+                  <button type="button" onClick={() => { setView("select"); setMethod(null); setSelectedBank(""); }} className="text-slate-400 hover:text-slate-600">                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
                     </svg>
                   </button>
@@ -196,11 +433,24 @@ function CheckoutContent() {
                   Choose your preferred way to pay. All transactions are encrypted and secure.
                 </p>
 
+                {total === 0 && referralApplied && (
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <svg className="h-5 w-5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-semibold text-emerald-700">Your referral code covers the full amount!</p>
+                      <p className="text-xs text-emerald-600">No payment needed — click Complete Purchase to enroll.</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-6 space-y-3">
                   {/* UPI */}
+                  {enabledGateways.upi && (
                   <button
                     type="button"
-                    onClick={() => setMethod("upi")}
+                    onClick={() => { setMethod("upi"); setView("upi"); }}
                     className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition ${
                       method === "upi" ? "border-brand bg-brand/5" : "border-slate-200 hover:border-slate-300 bg-white"
                     }`}
@@ -216,8 +466,10 @@ function CheckoutContent() {
                     </div>
                     {method === "upi" && <div className="h-4 w-4 rounded-full border-4 border-brand" />}
                   </button>
+                  )}
 
                   {/* Card */}
+                  {enabledGateways.card && (
                   <button
                     type="button"
                     onClick={() => setMethod("card")}
@@ -236,8 +488,10 @@ function CheckoutContent() {
                     </div>
                     {method === "card" && <div className="h-4 w-4 rounded-full border-4 border-brand" />}
                   </button>
+                  )}
 
                   {/* Net Banking */}
+                  {enabledGateways.netbanking && (
                   <button
                     type="button"
                     onClick={() => { setMethod("netbanking"); setView("netbanking"); }}
@@ -256,6 +510,7 @@ function CheckoutContent() {
                     </div>
                     {method === "netbanking" && <div className="h-4 w-4 rounded-full border-4 border-brand" />}
                   </button>
+                  )}
                 </div>
 
                 {/* Referral */}
@@ -270,22 +525,52 @@ function CheckoutContent() {
                     <input
                       type="text"
                       value={referral}
-                      onChange={(e) => setReferral(e.target.value)}
+                      onChange={(e) => {
+                        setReferral(e.target.value.toUpperCase());
+                        setReferralApplied(false);
+                        setReferralError("");
+                      }}
                       placeholder="Enter code here"
-                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+                      disabled={referralApplied}
+                      className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 disabled:bg-slate-50 disabled:text-slate-400"
                     />
-                    <button
-                      type="button"
-                      onClick={() => referral && setReferralApplied(true)}
-                      className="rounded-lg bg-[#1D3557] px-5 py-2 text-sm font-semibold text-white hover:bg-[#162840] transition"
-                    >
-                      Apply
-                    </button>
+                    {referralApplied ? (
+                      <button
+                        type="button"
+                        onClick={() => { setReferralApplied(false); setReferral(""); setReferralDiscount(0); }}
+                        className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-50 transition"
+                      >
+                        Remove
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleApplyReferral}
+                        disabled={!referral.trim() || referralValidating}
+                        className="rounded-lg bg-[#1D3557] px-5 py-2 text-sm font-semibold text-white hover:bg-[#162840] transition disabled:opacity-50"
+                      >
+                        {referralValidating ? "…" : "Apply"}
+                      </button>
+                    )}
                   </div>
-                  {referralApplied && <p className="mt-2 text-xs text-green-600">Referral code applied!</p>}
-                  <p className="mt-2 text-xs text-slate-400">
-                    Apply a code to get exclusive discounts on your first course.
-                  </p>
+                  {referralApplied && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-green-50 border border-green-200 px-3 py-2">
+                      <svg className="h-4 w-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                      <p className="text-xs font-semibold text-green-700">
+                        {referralDiscountType === "percent"
+                          ? `${referralDiscount}% off applied${referralDiscount >= 100 ? " — Free!" : ""}`
+                          : `$${referralDiscount.toFixed(2)} off applied`}
+                      </p>
+                    </div>
+                  )}
+                  {referralError && (
+                    <p className="mt-2 text-xs text-red-500">{referralError}</p>
+                  )}
+                  {!referralApplied && !referralError && (
+                    <p className="mt-2 text-xs text-slate-400">Apply a code to get exclusive discounts on your course.</p>
+                  )}
                 </div>
               </>
             )}
@@ -307,13 +592,36 @@ function CheckoutContent() {
                     {exam ? `${exam.toUpperCase()} — ` : ""}{planName} Plan
                   </p>
                   <span className="mt-1 inline-block rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand">
-                    {view === "netbanking" ? "Advanced Course" : "Premium Course"}
+                    {view === "netbanking" ? "Advanced Course" : view === "upi" ? "Premium Course" : "Premium Course"}
                   </span>
                 </div>
               </div>
 
-              {view === "netbanking" ? (
+              {view === "upi" ? (
                 <>
+                  <div className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-sm">
+                    <div className="flex justify-between text-slate-600">
+                      <span>{exam ? `${exam.toUpperCase()} Preparation` : planName}</span>
+                      <span>${price.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Digital Certification</span>
+                      <span>$45.00</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Processing Fee</span>
+                      <span>$17.00</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 border-t border-slate-100 pt-4">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-sm font-bold text-slate-700">Total amount</span>
+                      <span className="text-2xl font-bold text-slate-900">${total.toFixed(2)}</span>
+                    </div>
+                    <p className="text-right text-[10px] font-semibold uppercase tracking-wide text-slate-400">Tax Inclusive</p>
+                  </div>
+                </>
+              ) : view === "netbanking" ? (                <>
                   <div className="mt-5 space-y-2 border-t border-slate-100 pt-4 text-sm">
                     <div className="flex justify-between text-slate-600">
                       <span>Course Subtotal</span>
@@ -360,6 +668,16 @@ function CheckoutContent() {
                       <span>Special Discount</span>
                       <span>-${DISCOUNT.toFixed(2)}</span>
                     </div>
+                    {referralApplied && (
+                      <div className="flex justify-between font-semibold text-emerald-600">
+                        <span>Referral ({referral})</span>
+                        <span>
+                          -{referralDiscountType === "percent"
+                            ? `${referralDiscount}%`
+                            : `$${referralDeduction.toFixed(2)}`}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="mt-4 border-t border-slate-100 pt-4">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total Amount</p>
@@ -370,7 +688,7 @@ function CheckoutContent() {
                   </div>
                   <button
                     type="button"
-                    disabled={!method || loading}
+                    disabled={(!method && total > 0) || loading}
                     onClick={handleComplete}
                     className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#1D3557] py-3 text-sm font-bold text-white transition hover:bg-[#162840] disabled:opacity-50"
                   >
@@ -387,7 +705,7 @@ function CheckoutContent() {
             </div>
 
             {/* Money back */}
-            {method !== "netbanking" && view !== "netbanking" && (
+            {method !== "netbanking" && view !== "netbanking" && view !== "upi" && (
               <div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <svg className="h-5 w-5 shrink-0 text-brand mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
@@ -397,6 +715,28 @@ function CheckoutContent() {
                   <p className="text-xs text-slate-500 mt-0.5">Full refund within 30 days if you&apos;re not satisfied with the course content.</p>
                 </div>
               </div>
+            )}
+
+            {/* UPI — student perk + security note */}
+            {view === "upi" && (
+              <>
+                <div className="rounded-xl bg-[#1D3557] p-4 text-white">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300">Student Perk</p>
+                  <p className="mt-1 text-sm font-bold leading-snug">Join 2,000+ elite students in our exclusive community.</p>
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-300">
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                    </svg>
+                    Access granted after payment
+                  </div>
+                </div>
+                <div className="flex gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+                  <svg className="h-4 w-4 shrink-0 text-brand mt-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+                  </svg>
+                  Your payment information is processed securely. We do not store any of your UPI credentials on our servers.
+                </div>
+              </>
             )}
           </aside>
         </div>
