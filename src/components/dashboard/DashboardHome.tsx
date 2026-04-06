@@ -4,6 +4,7 @@ import {
   dashboardContentForExam,
   type RecentItem,
 } from "@/lib/dashboard-by-exam";
+import { ExamDateCard } from "./ExamDatePicker";
 
 function breadcrumbTrail(exam: ExamId | null) {
   if (exam === "IELTS") return "Exams > IELTS Academic";
@@ -155,15 +156,7 @@ export function DashboardHome({ exam }: { exam: ExamId | null }) {
               {content?.avgScore ?? "—"}
             </p>
           </div>
-          <div className="flex min-h-[100px] min-w-[140px] flex-1 flex-col justify-center rounded-2xl bg-slate-100/90 px-5 py-4 shadow-sm ring-1 ring-slate-200/60 sm:flex-initial sm:min-w-[160px]">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              Days left
-            </p>
-            <p className="mt-1 text-3xl font-extrabold tabular-nums text-[#F59E0B]">
-              {content?.daysLeft ?? "—"}
-            </p>
-          </div>
-        </div>
+          <ExamDateCard />        </div>
       </div>
 
       <div className="grid gap-8 xl:grid-cols-[1fr_minmax(260px,300px)] xl:items-start">
