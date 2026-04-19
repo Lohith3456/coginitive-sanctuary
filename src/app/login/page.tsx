@@ -57,6 +57,22 @@ export default function LoginPage() {
 
   const cleanPhone = () => identifier.replace(/[\s\-()]/g, '');
 
+  // After login — check enrollments and redirect
+  async function redirectAfterLogin(role: string) {
+    if (role === 'admin') { router.replace('/admin'); return; }
+    try {
+      const res = await fetch(`${API}/api/enrollments/me`, { credentials: 'include' });
+      if (res.ok) {
+        const enrollments = await res.json();
+        if (Array.isArray(enrollments) && enrollments.length > 0) {
+          router.replace('/dashboard');
+          return;
+        }
+      }
+    } catch { /* fall through */ }
+    router.replace('/exams');
+  }
+
   // Send OTP
   async function handleSendOtp() {
     if (!PHONE_REGEX.test(cleanPhone())) {
@@ -97,7 +113,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.message); return; }
-      router.replace(data.role === 'admin' ? '/admin/dashboard' : '/exams');
+      await redirectAfterLogin(data.role ?? 'user');
     } catch {
       setError('Verification failed. Please try again.');
     } finally {
@@ -128,7 +144,7 @@ export default function LoginPage() {
     try {
       const id = mode === 'email' ? { email: identifier } : { phone: cleanPhone() };
       const { role } = await login(id, password);
-      router.replace(role === 'admin' ? '/admin' : '/exams');
+      await redirectAfterLogin(role);
     } catch {
       setError('Invalid credentials. Please try again.');
     } finally {

@@ -105,9 +105,73 @@ function CheckoutContent() {
     }
   }
 
-  async function handleComplete() {
-    if (!method && total > 0) return;
+  function downloadReceipt() {
+    const receiptId = `CS-${Date.now().toString(36).toUpperCase()}`;
+    const date = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Receipt — Cognitive Sanctuary</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; color: #1e293b; margin: 0; padding: 40px; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1D3557; padding-bottom: 20px; margin-bottom: 24px; }
+    .brand { font-size: 20px; font-weight: 800; color: #1D3557; }
+    .brand-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .receipt-id { text-align: right; font-size: 12px; color: #64748b; }
+    .receipt-id strong { display: block; font-size: 16px; color: #1D3557; }
+    h2 { font-size: 18px; color: #1D3557; margin: 0 0 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+    td:last-child { text-align: right; font-weight: 600; }
+    .total-row td { border-bottom: none; font-size: 16px; font-weight: 700; padding-top: 16px; }
+    .badge { display: inline-block; background: #d1fae5; color: #065f46; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .footer { margin-top: 40px; font-size: 11px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 16px; }
+    @media print { body { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="brand">Cognitive Sanctuary</div>
+      <div class="brand-sub">Exam Preparation Platform</div>
+    </div>
+    <div class="receipt-id">
+      <strong>${receiptId}</strong>
+      Receipt No. · ${date}
+    </div>
+  </div>
+  <h2>Payment Receipt</h2>
+  <table>
+    <tr><td>Plan</td><td>${planName}</td></tr>
+    ${exam ? `<tr><td>Exam</td><td>${exam.toUpperCase()}</td></tr>` : ""}
+    <tr><td>Original Price</td><td>$${price.toFixed(2)}</td></tr>
+    <tr><td>Platform Fee</td><td>$${PLATFORM_FEE.toFixed(2)}</td></tr>
+    <tr><td>Special Discount</td><td>-$${DISCOUNT.toFixed(2)}</td></tr>
+    ${referralApplied ? `<tr><td>Referral (${referral})</td><td style="color:#059669">-$${referralDeduction.toFixed(2)}</td></tr>` : ""}
+    <tr><td>Payment Method</td><td>${method ?? "—"}</td></tr>
+    <tr><td>Status</td><td><span class="badge">Active</span></td></tr>
+    <tr class="total-row"><td>Total Paid</td><td>$${total.toFixed(2)}</td></tr>
+  </table>
+  <div class="footer">
+    This is a computer-generated receipt. No signature required.<br/>
+    Cognitive Sanctuary · support@cognitivesanctuary.com
+  </div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 300);
+  }
+
+  async function handleComplete() {    if (!method && total > 0) return;
     setLoading(true);
+
+    // Redeem referral code usage count
     if (referralApplied && referral.trim()) {
       await fetch(`${API}/api/admin/referrals/redeem`, {
         method: "POST",
@@ -115,6 +179,21 @@ function CheckoutContent() {
         body: JSON.stringify({ code: referral.trim() }),
       }).catch(() => {});
     }
+
+    // Store enrollment
+    await fetch(`${API}/api/enrollments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        examType: exam?.toUpperCase() || "IELTS",
+        plan: planName.toLowerCase(),
+        amountPaid: total,
+        paymentMethod: method,
+        referralCode: referralApplied ? referral.trim() : null,
+      }),
+    }).catch(() => {});
+
     setTimeout(() => {
       setLoading(false);
       setConfirmed(true);
@@ -147,7 +226,7 @@ function CheckoutContent() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <div className="grid grid-cols-[200px_1fr_320px] gap-8">
+        <div className={`grid gap-8 ${confirmed ? "grid-cols-[200px_1fr]" : "grid-cols-[200px_1fr_320px]"}`}>
 
           {/* Left — stepper sidebar */}
           <aside>
@@ -223,13 +302,23 @@ function CheckoutContent() {
                   </div>
                 </div>
 
-                <div className="mt-6 flex gap-3">
+                <div className="mt-6 flex flex-wrap justify-center gap-3">
                   <Link
                     href="/dashboard"
                     className="rounded-xl bg-[#1D3557] px-6 py-3 text-sm font-bold text-white hover:bg-[#162840] transition"
                   >
                     Go to Dashboard
                   </Link>
+                  <button
+                    type="button"
+                    onClick={downloadReceipt}
+                    className="flex items-center gap-2 rounded-xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Download Receipt
+                  </button>
                   <Link
                     href="/exams"
                     className="rounded-xl border border-slate-200 px-6 py-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition"
@@ -576,8 +665,8 @@ function CheckoutContent() {
             )}
           </main>
 
-          {/* Right — order summary */}
-          <aside className="space-y-4">
+          {/* Right — order summary (hidden on confirmation) */}
+          {!confirmed && <aside className="space-y-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="mb-4 text-base font-bold text-slate-800">Order Summary</h2>
 
@@ -738,7 +827,7 @@ function CheckoutContent() {
                 </div>
               </>
             )}
-          </aside>
+          </aside>}
         </div>
       </div>
     </div>
