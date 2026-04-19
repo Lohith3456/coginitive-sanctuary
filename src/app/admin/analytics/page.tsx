@@ -293,6 +293,9 @@ function ReferralModal({ open, onClose, onAdd }: {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!code || !amount) { setErr("Code and discount are required"); return; }
+    if (type === "percent" && (Number(amount) < 0 || Number(amount) > 100)) {
+      setErr("Percentage discount must be between 0 and 100"); return;
+    }
     setErr(""); setLoading(true);
     await onAdd(code, type, amount, expires, max);
     setLoading(false);
